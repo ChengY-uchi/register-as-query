@@ -246,10 +246,6 @@ KITTI.
   improvement that turned out to be a **double zero-init dead-gate**
   artifact (see `docs/`-equivalent notes in commit history). After
   fixing, D7 ≈ D2.
-- **DQ_LQ** (learnable queries instead of registers) actually matched DQ
-  on clean — but has an *optimization* advantage (SGD finds task-optimal
-  queries) and so is not a clean ablation. `DQ_FRQ` (fixed random
-  queries, no learning) is the cleaner control.
 
 ## Planned experiments (~2-day budget)
 
@@ -298,12 +294,68 @@ Re-train DQ/DQC on KITTI (one seed minimum) and re-eval OOD. Confirms
 whether the depth-only marginal signal holds outdoors, and whether KITTI
 shows the same blur+/noise− pattern as NYU.
 
-### Schedule
+### Mechanism analyses (parallel to P1–P4, for "promising" figures)
 
-| Day | Morning | Afternoon |
-|-----|---------|-----------|
-| 1   | Param-matched control (P1)  | DQ_FRQ ablation (P2) |
-| 2   | Perm-registers eval (P3) + KITTI re-eval (P4) | Compile final results, write paper draft |
+Numbers alone won't convince reviewers; the paper needs **mechanism
+visualizations** that *explain* why register cross-attention helps.
+These all reuse existing checkpoints and cached features — no extra
+training required.
+
+#### M1 — Cross-attention map visualization (≈ half day, highest value)
+
+Hook the `RegQueryBranch.forward` to dump the per-query attention
+weights `softmax(Q · K^T)` on the test set. For each test image, save
+4 heat-maps (one per register-query) at the patch grid resolution and
+upsample to the input.
+
+- Figure: rows = sample test images, columns = `[input, GT, S_BN pred,
+  S_DQ pred, reg0_attn, reg1_attn, reg2_attn, reg3_attn]`.
+- Story we hope to see: each register specializes spatially (e.g. one
+  attends to sky/background, another to object centroids, another to
+  boundaries). If attention maps are sharp and coherent → "register
+  acts as a content-aware region selector" is the clean mechanism. If
+  the 4 maps look nearly identical → registers have collapsed to a
+  redundant pooler, which would itself be a useful negative finding.
+
+#### M2 — Per-class IoU breakdown for VOC seg (≈ 1 h)
+
+Already computed in `train_seg.py`'s `summary.json["best"]["per_class"]`
+field — needs only a plotting script.
+
+- Figure: horizontal bar chart of `S_DQ − S_BN` Δ-IoU per class,
+  sorted; bars colored by class type (large object / small object /
+  thin/elongated / background).
+- Story: is the improvement concentrated in classes that need global
+  context (sofa, dining-table, sky) or evenly spread? Concentration in
+  large/global classes would support the "registers carry global region
+  info" hypothesis.
+
+#### M4 — Register-token similarity / specialization (≈ 30 min)
+
+Per test image, compute the 4×4 cosine similarity matrix between the
+4 register tokens at L23. Average over the test set.
+
+- Figure: a single 4×4 heat-map (with the diagonal masked).
+- Story: low off-diagonal cosines (< 0.5) → the 4 registers carry
+  orthogonal information → the 4-query branch is justified. High
+  cosines (> 0.9) → registers have collapsed and the 4-query design is
+  over-parameterized; this would partially explain why DQ_FRQ
+  (with random orthogonal queries) might actually do as well as DQ.
+
+#### M7 — Cross-task register attention comparison (≈ 1 day)
+
+Run M1's attention-extraction on the three trained heads
+(`DQ`, `S_DQ`, `N_DQ`) on the **same set of test images** and compare:
+do the 4 register queries attend to the **same** spatial regions when
+trained for depth vs. seg vs. normal?
+
+- Figure: 4×3 grid (query × task). Each cell shows the averaged
+  attention map for that (register, task) pair.
+- Story: if attention patterns are similar across tasks → registers
+  encode a task-agnostic spatial decomposition (e.g. one for
+  foreground, one for background) that is reused. If patterns differ
+  per task → the cross-attention head learns task-specific routing
+  on top of the shared register content.
 
 ## Possible outcomes and how we will write up
 
