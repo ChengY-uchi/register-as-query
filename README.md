@@ -342,23 +342,6 @@ All three outcomes are publishable; we are not biased toward A.
 - All seeds use the same data shuffle order (controlled by
   `--seed` only).
 
-## Publishing to GitHub
-
-```bash
-cd register-as-query/
-git init
-git add .
-git commit -m "Initial commit: register-as-query for dense prediction"
-
-# create a new empty repo on github.com, then:
-git remote add origin git@github.com:<your-user>/register-as-query.git
-git branch -M main
-git push -u origin main
-```
-
-The `.gitignore` already excludes the heavy `data/` cache (~17 GB) and
-the per-run `best.pt` checkpoints (~100 MB each). Only code +
-`summary.json` outputs are committed.
 
 ## Acknowledgements
 
