@@ -1,0 +1,24 @@
+# Cached frozen-backbone features (re-extract from raw datasets; ~17 GB)
+data/
+
+# Datasets (downloaded separately)
+datasets/
+
+# Trained checkpoints — keep summary.json but not best.pt (~100 MB each)
+results/**/best.pt
+results/**/*.log
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyc
+.ipynb_checkpoints/
+
+# Editor / OS
+.vscode/
+.DS_Store
+*.swp
+
+# Slurm / runtime
+*.out
+*.err
